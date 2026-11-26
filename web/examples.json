@@ -1,0 +1,98 @@
+{
+  "stage": 3,
+  "repo": "gtm-03-ai-sdr",
+  "title": "AI SDRs & Hyper-Personalization",
+  "tagline": "The guardrails behind an AI SDR: waterfall enrichment with a credit budget, signal-based personal hooks with a draft linter, and multi-step sequences that respect time zones, weekends and mailbox caps.",
+  "why": "An AI SDR is only as good as its data and its brakes. Bad enrichment means bounced emails and burned domains. Generic hooks get ignored. A sequence that keeps emailing someone who replied, or sends 400 emails from one mailbox on a Monday, gets the domain blocked. This repo covers the deterministic parts that keep an AI SDR safe and relevant, before any LLM writes a word.",
+  "covers": [
+    "Clay-style waterfall: providers in order, per-field first valid answer, stop when filled, credit budget, per-provider spend, fill rate",
+    "Email syntax check before accepting an enriched email",
+    "Hook selection by priority and freshness (funding, hiring, tech change, content), with a generic fallback",
+    "Template fill with {{variables}} and a lint gate: unresolved variables, word limit, spam words, exactly one CTA",
+    "Sequence builder: business-day waits, Monday-based weeks, local send hour to UTC, mailbox daily cap with overflow, stop on reply / bounce / unsubscribe"
+  ],
+  "gaps": [
+    "No Clay / Apollo / scraping connection: provider responses are synthetic JSON",
+    "No LLM call: the hook library is the place an LLM draft would plug in, and the linter is the gate it must pass",
+    "Does not send email and does not check deliverability (SPF, DKIM, warm-up)"
+  ],
+  "ops": [
+    {
+      "op": "waterfall_enrich",
+      "label": "Waterfall enrich",
+      "help": "Fill email, title and headcount from cheap providers first. A bad email from one provider is skipped and the next provider is tried.",
+      "input": {
+        "fields": ["email", "title", "headcount", "tech_stack"],
+        "credit_budget": 20,
+        "providers": [
+          {"name": "cheap_db", "cost_per_lookup": 0.5, "data": {
+            "northwind.example": {"title": "VP Revenue Operations", "headcount": 420},
+            "contoso.example": {"email": "lee at contoso", "headcount": 1800}
+          }},
+          {"name": "mid_api", "cost_per_lookup": 1.5, "data": {
+            "northwind.example": {"email": "dana.reyes@northwind.example", "tech_stack": ["Salesforce", "Snowflake"]},
+            "contoso.example": {"email": "lee.park@contoso.example", "title": "Director, Sales Ops"}
+          }},
+          {"name": "premium_api", "cost_per_lookup": 4, "data": {
+            "contoso.example": {"tech_stack": ["HubSpot", "BigQuery"]},
+            "tailspin.example": {"email": "ops@tailspin.example"}
+          }}
+        ],
+        "leads": [
+          {"name": "Dana Reyes", "domain": "northwind.example"},
+          {"name": "Lee Park", "domain": "contoso.example"},
+          {"name": "Unknown", "domain": "tailspin.example"}
+        ]
+      }
+    },
+    {
+      "op": "personalize_email",
+      "label": "Personalize + lint",
+      "help": "Pick the freshest high-priority signal as the hook, fill the template and lint the draft. Edit the body to see the linter fail.",
+      "input": {
+        "hook_priority": ["funding", "hiring", "tech_change", "content"],
+        "max_signal_age_days": 60,
+        "max_words": 90,
+        "hook_library": {
+          "funding": "Congrats on the {{round}} — teams usually double pipeline targets right after.",
+          "hiring": "Saw you're hiring {{count}} {{role}} roles, so ramp time is probably on your mind.",
+          "tech_change": "Noticed you moved to {{tool}}; the first 90 days are when data gaps show up.",
+          "content": "Your post on {{topic}} was sharp.",
+          "generic": "Teams like {{company}} often lose deals to slow lead routing."
+        },
+        "prospect": {
+          "first_name": "Dana", "company": "Northwind Traders", "title": "VP Revenue Operations",
+          "signals": [
+            {"type": "funding", "round": "Series B", "age_days": 140},
+            {"type": "hiring", "count": 6, "role": "SDR", "age_days": 9},
+            {"type": "content", "topic": "lead routing", "age_days": 20}
+          ]
+        },
+        "subject_template": "{{first_name}} — SDR ramp at {{company}}",
+        "body_template": "Hi {{first_name}},\n\n{{hook}}\n\nWe help RevOps leaders route every hot account to the right rep in under 5 minutes, with the data cleaned first.\n\nWorth a 15-minute look next week?\n\n— Alex"
+      }
+    },
+    {
+      "op": "build_sequence",
+      "label": "Sequence schedule",
+      "help": "Schedule a 4-step sequence. Day 0 is a Monday. Weekends are skipped, the mailbox cap pushes overflow, and replied prospects get no steps.",
+      "input": {
+        "start_day": 4,
+        "local_send_hour": 9,
+        "mailbox_daily_cap": 2,
+        "steps": [
+          {"channel": "email"},
+          {"channel": "linkedin", "wait_business_days": 2},
+          {"channel": "email", "wait_business_days": 3},
+          {"channel": "email", "wait_business_days": 5}
+        ],
+        "prospects": [
+          {"id": "dana@northwind", "mailbox": "alex@outbound.example", "utc_offset_hours": -8},
+          {"id": "lee@contoso", "mailbox": "alex@outbound.example", "utc_offset_hours": -5},
+          {"id": "kim@fabrikam", "mailbox": "alex@outbound.example", "utc_offset_hours": 1},
+          {"id": "pat@tailspin", "mailbox": "alex@outbound.example", "status": "replied"}
+        ]
+      }
+    }
+  ]
+}

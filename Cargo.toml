@@ -1,0 +1,23 @@
+[package]
+name = "gtm-03-ai-sdr"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "The guardrails behind an AI SDR: waterfall enrichment with a credit budget, signal-based personal hooks with a draft linter, and multi-step sequences that respect time zones, weekends and mailbox caps."
+repository = "https://github.com/braylo777/gtm-03-ai-sdr"
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+
+[[bin]]
+name = "gtm-03-ai-sdr"
+path = "src/main.rs"
+
+[dependencies]
+serde_json = "=1.0.154"
+
+[profile.release]
+opt-level = "s"
+lto = true
+panic = "abort"
+codegen-units = 1
